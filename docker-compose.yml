@@ -1,0 +1,35 @@
+version: '3.5'
+services:
+  spark244:
+    build: ./spark
+    container_name: spark244
+    ports:
+      - '8889:8889' 
+      - '7077:7077' 
+    command: bash -c "/spark/bin/spark-class org.apache.spark.deploy.master.Master --ip spark244 --port 7077 --webui-port 8889"
+    # /spark/bin/spark-submit --master spark://spark244:7077 --class com.example.MyFirstScalaSpark /project/target/scala-2.11/myfirstscalaspark_2.11-0.1.0.jar
+    volumes:
+      - ./project:/project
+  sparkworker1:
+    build: ./spark
+    container_name: sparkworker1
+    command: bash -c "/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --webui-port 8089 spark://spark244:7077"
+    volumes:
+      - ./project:/project
+  sparkworker2:
+    build: ./spark
+    container_name: sparkworker2
+    command: bash -c "/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --webui-port 8089 spark://spark244:7077"  
+    volumes:
+      - ./project:/project
+  scala:
+    build: ./scala
+    env_file:
+      - ./scala/.scala.env
+    command: /bin/bash -c "touch /tmp/t & tail -f /tmp/t"
+    volumes:
+      - ./project:/project
+
+networks:
+  default:
+    name: spark_network
