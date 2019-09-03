@@ -1,25 +1,25 @@
 version: '3.5'
 services:
-  spark244:
+  sparkmaster:
     build: ./spark
-    container_name: spark244
+    container_name: sparkmaster
     ports:
       - '8889:8889' 
       - '7077:7077' 
-    command: bash -c "/spark/bin/spark-class org.apache.spark.deploy.master.Master --ip spark244 --port 7077 --webui-port 8889"
-    # /spark/bin/spark-submit --master spark://spark244:7077 --class com.example.MyFirstScalaSpark /project/target/scala-2.11/myfirstscalaspark_2.11-0.1.0.jar
+    command: bash -c "/spark/bin/spark-class org.apache.spark.deploy.master.Master --ip sparkmaster --port 7077 --webui-port 8889"
+    # /spark/bin/spark-submit --master spark://sparkmaster:7077 --class com.example.MyFirstScalaSpark /project/target/scala-2.11/myfirstscalaspark_2.11-0.1.0.jar
     volumes:
       - ./project:/project
   sparkworker1:
     build: ./spark
     container_name: sparkworker1
-    command: bash -c "/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --webui-port 8089 spark://spark244:7077"
+    command: bash -c "/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --webui-port 8089 spark://sparkmaster:7077"
     volumes:
       - ./project:/project
   sparkworker2:
     build: ./spark
     container_name: sparkworker2
-    command: bash -c "/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --webui-port 8089 spark://spark244:7077"  
+    command: bash -c "/spark/bin/spark-class org.apache.spark.deploy.worker.Worker --webui-port 8089 spark://sparkmaster:7077"  
     volumes:
       - ./project:/project
   scala:
@@ -37,6 +37,73 @@ services:
     volumes:
       - ./jupyter/work:/home/jovyan/work 
 
+  namenode:
+    #image: bde2020/hadoop-namenode:2.0.0-hadoop3.1.1-java8
+    build: ./hadoop/namenode
+    container_name: namenode
+    ports:
+      - 9870:9870
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hadoop/hadoop.env
+  datanode:
+    #image: bde2020/hadoop-datanode:2.0.0-hadoop3.1.1-java8
+    build: ./hadoop/datanode
+    container_name: datanode
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    env_file:
+      - ./hadoop/hadoop.env
+  resourcemanager:
+    #image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.1.1-java8
+    build: ./hadoop/resourcemanager
+    depends_on:
+      - namenode
+    depends_on:
+      - datanode
+    links: 
+      - namenode
+    restart: on-failure
+    container_name: resourcemanager
+    ports:
+      - 8088:8088
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode:9864"
+    env_file:
+      - ./hadoop/hadoop.env
+  nodemanager:
+    #image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.1.1-java8
+    build: ./hadoop/nodemanager
+    container_name: nodemanager
+    depends_on:
+      - namenode
+    depends_on:
+      - datanode
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode:9864 resourcemanager:8088"
+    env_file:
+      - ./hadoop/hadoop.env
+  historyserver:
+    #image: bde2020/hadoop-historyserver:2.0.0-hadoop3.1.1-java8
+    build: ./hadoop/historyserver
+    container_name: historyserver
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode:9864 resourcemanager:8088"
+    volumes:
+      - hadoop_historyserver:/hadoop/yarn/timeline
+    env_file:
+      - ./hadoop/hadoop.env
+
 networks:
   default:
-    name: spark_network
+    name: bigdata_network
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode:
+  hadoop_historyserver:
